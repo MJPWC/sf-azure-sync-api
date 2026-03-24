@@ -1,0 +1,94 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule
+	xmlns:ms-aichain="http://www.mulesoft.org/schema/mule/ms-aichain"
+	xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core"
+	xmlns:http="http://www.mulesoft.org/schema/mule/http"
+	xmlns="http://www.mulesoft.org/schema/mule/core"
+	xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd
+http://www.mulesoft.org/schema/mule/ms-aichain http://www.mulesoft.org/schema/mule/ms-aichain/current/mule-ms-aichain.xsd">
+	<http:listener-config name="HTTP_Listener_config"
+		doc:name="HTTP Listener config"
+		doc:id="210404b9-7690-4836-8dd8-538f700f30c2">
+		<http:listener-connection host="0.0.0.0"
+			port="8081" />
+	</http:listener-config>
+
+	<flow name="sf-azure-image-sync-health-check-flow"
+		doc:id="65b68f9f-0614-46c6-b0e3-80214ed89abb">
+		<http:listener doc:name="Listener"
+			doc:id="9e86c01a-c94b-4931-bb1b-2ad094a64933"
+			config-ref="HTTP_Listener_config" path="health/summary" allowedMethods="POST"/>
+		<logger level="INFO" doc:name="Logger"
+			doc:id="7b526c7e-a054-4ac6-ae31-a37fcc07c672"
+			message="check azure api health." />
+		<ee:transform doc:name="Transform Message" doc:id="4137326e-16bb-4197-b40f-48a51e6354ec" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+payload filterObject ((value, key, index) -> (key as String ==  "DiagnosticSummary")) mapObject ((value, key, index) -> {
+    '$key': {
+        "patientId": value.recordId,
+        "Code Name": value.CodeName,
+        "CodeId": value.CodeId
+    }
+})]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+		<http:request method="POST" doc:name="Request"
+			doc:id="2a360e1b-900a-4f3e-ac4c-05550c4bbe27"
+			url="https://healthassistantapim.azure-api.net/test/test/health">
+			<http:headers><![CDATA[#[output application/java
+---
+{
+	"Ocp-Apim-Subscription-Key" : "6cc93daaefd84c01914ba87c8561d75f"
+}]]]></http:headers>
+		</http:request>
+		<ee:transform doc:name="Transform Message"
+			doc:id="fe6b199e-594e-461c-88a5-3533d97c5096">
+			<ee:message>
+				<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+payload]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+		<logger level="INFO" doc:name="Logger" doc:id="00709b12-fd04-416e-8c66-c3f319df3684" message="azure api response returned succeesfully."/>
+		<error-handler >
+			<on-error-propagate enableNotifications="true" logException="true" doc:name="On Error Propagate" doc:id="c6e9e957-e7cd-4c09-9715-2012fcefd476" type="ANY">
+				<ee:transform doc:name="Transform Message" doc:id="01a4c229-b0c8-42b0-8ec0-f64f6fba5bed" >
+					<ee:message >
+						<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+payload]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+			</on-error-propagate>
+		</error-handler>
+
+	</flow>
+	<flow name="fetch-custdeatails"
+		doc:id="2ac84254-4a00-4323-b0ea-6cdf982fe1e1">
+		<http:listener doc:name="Listener"
+			doc:id="a3de6e74-6b8d-4622-9bb5-87e259afa1ff"
+			config-ref="HTTP_Listener_config" path="mule/healthCheck"/>
+		<logger level="INFO" doc:name="Logger" doc:id="bea9d52e-f912-466f-9201-57cb54070aab" message="check mule api health."/>
+		<ee:transform doc:name="Transform Message"
+			doc:id="21e6493d-40b5-474f-8c29-be67688de084">
+			<ee:message>
+				<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+  "status": "ok"
+}]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+	</flow>
+</mule>
